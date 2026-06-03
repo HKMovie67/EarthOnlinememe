@@ -395,15 +395,15 @@
             right: 8vw;
             top: 50%;
             transform: translateY(-50%);
-            background: transparent; /* 背景完全透明 */
-            border: none;             /* 移除邊框 */
+            background: transparent; 
+            border: none;             
             padding: 30px 25px;
             border-radius: 0;
-            backdrop-filter: none;    /* 移除模糊效果以露出背景 */
+            backdrop-filter: none;    
             -webkit-backdrop-filter: none;
             text-align: center;
             width: 320px;
-            box-shadow: none;         /* 移除外陰影 */
+            box-shadow: none;         
             opacity: 0;
             transition: opacity 1s ease;
         }
@@ -438,7 +438,7 @@
             width: 100%; 
             text-align: center; 
             padding-left: 0; 
-            background: rgba(0, 168, 255, 0.25); /* 讓透明畫面中的按鈕稍微明顯一點 */
+            background: rgba(0, 168, 255, 0.25); 
             border-color: rgba(0, 168, 255, 0.6);
         }
         .spawn-overlay .menu-btn::before { display: none; }
@@ -505,6 +505,95 @@
         .char-bottom { text-align: center; margin-top: auto; }
         .char-bottom .pulse-text { font-size: 1.3rem; color: #00a8ff; margin-bottom: 8px; font-weight: bold; letter-spacing: 4px; animation: pulse 2s infinite; }
         .time-est { font-size: 0.9rem; color: rgba(255,255,255,0.5); font-family: monospace; letter-spacing: 1px; }
+
+        /* ==================== 登入專用全新面板樣式 ==================== */
+        .screen .login-panel-transparent {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+
+        #login-character-screen.active .left-panel-container.login-panel-transparent {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        #login-character-screen.active .right-panel-container.login-panel-transparent {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+            pointer-events: auto;
+        }
+
+        .login-value-text {
+            font-size: 1.05rem;
+            color: #ffffff;
+            font-weight: bold;
+            text-shadow: 0 2px 8px #000, 0 0 4px #000;
+        }
+
+        /* 登入隨機成就項目 */
+        .login-ach-item {
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 8px;
+            text-shadow: 0 2px 6px #000;
+        }
+
+        .login-ach-title {
+            font-size: 1.05rem;
+            font-weight: bold;
+            margin-bottom: 4px;
+            letter-spacing: 1px;
+        }
+
+        .login-ach-desc {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.75);
+            line-height: 1.4;
+        }
+
+        /* 登入畫面底部排版 - 改為左右水平對齊，防止重疊 */
+        .login-bottom-wrapper {
+            position: absolute;
+            bottom: 4%;
+            left: 8vw;
+            width: 84vw;
+            display: flex;
+            flex-direction: row;        /* 橫向排列 */
+            justify-content: space-between; /* 一左一右分開 */
+            align-items: center;        /* 垂直置中對齊 */
+            z-index: 15;
+        }
+
+        .login-dynamic-tips {
+            font-size: 1.15rem;
+            color: #00a8ff;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 10px #000, 0 0 8px rgba(0, 168, 255, 0.6);
+            animation: pulse 2.5s infinite;
+            min-height: 1.8rem;
+            text-align: right;          /* 右側文字靠右對齊 */
+            max-width: 50vw;
+        }
+
+        .login-sleep-status {
+            font-size: 1.5rem;
+            color: #ffffff;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-shadow: 0 2px 12px #000, 0 0 6px #000;
+            text-align: left;           /* 左側文字靠左對齊 */
+        }
+        /* ============================================================= */
 
         /* 自定義 Toast */
         .toast-container {
@@ -597,6 +686,8 @@
             .spawn-title { font-size: 1.5rem; }
             .spawn-location { font-size: 1.2rem; margin-bottom: 5px; }
             .spawn-desc { font-size: 0.8rem; margin-bottom: 15px; }
+            .login-sleep-status { font-size: 1.15rem; }
+            .login-dynamic-tips { font-size: 0.95rem; }
         }
     </style>
 
@@ -695,7 +786,7 @@
             <h2 class="page-header" style="font-size: 1.8rem;">登入或註冊</h2>
             <div class="page-subtitle" style="margin-bottom: 30px;">ACCOUNT ACCESS</div>
             <div class="button-group" style="width: 100%;">
-                <div class="menu-btn" style="text-align: center; padding-left: 0;" onclick="showToast('系統提示', '登入功能暫未開放', 'info')">登入</div>
+                <div class="menu-btn" style="text-align: center; padding-left: 0;" onclick="handleLogin()">登入</div>
                 <div class="menu-btn" style="text-align: center; padding-left: 0;" onclick="startReincarnation()">
                     <img src="https://raw.githubusercontent.com/a330900neo/EarthOnlinememe/main/DNAicon.png" class="btn-icon">註冊
                 </div>
@@ -758,6 +849,36 @@
         </div>
     </div>
 
+    <div id="login-character-screen" class="screen">
+        <div class="left-panel-container login-panel-transparent">
+            <h2 class="page-header">角色資訊</h2>
+            <div class="page-subtitle">CHARACTER PROFILE</div>
+            <div class="content-list" style="max-height: 58vh; overflow-y: auto;">
+                <div class="list-item"><span class="setting-label">性別</span><span class="login-value-text" id="login-gender">--</span></div>
+                <div class="list-item"><span class="setting-label">家境(月入)</span><span class="login-value-text" id="login-wealth">--</span></div>
+                <div class="list-item"><span class="setting-label">地區</span><span class="login-value-text" id="login-region">香港</span></div>
+                <div class="list-item"><span class="setting-label">體質</span><span class="login-value-text" id="login-constitution">--</span></div>
+                <div class="list-item"><span class="setting-label">遊玩年數</span><span class="login-value-text" id="login-years">--</span></div>
+                <div class="list-item"><span class="setting-label">愛情經驗</span><span class="login-value-text" id="login-love">--</span></div>
+                <div class="list-item" style="border-color: rgba(0, 168, 255, 0.4); background: rgba(0, 168, 255, 0.12);">
+                    <span class="setting-label" style="color: #00a8ff; font-weight: bold;">成就數量</span>
+                    <span class="login-value-text" id="login-achievements-count" style="color: #00a8ff;">0 個</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel-container login-panel-transparent">
+            <h2 class="page-header">解鎖成就</h2>
+            <div class="page-subtitle">UNLOCKED ACHIEVEMENTS</div>
+            <div class="content-list" id="login-achievements-list" style="max-height: 55vh; overflow-y: auto;">
+                </div>
+        </div>
+
+        <div class="login-bottom-wrapper">
+            <div class="login-sleep-status">正在等待角色完成睡眠</div>
+            <div id="login-tips-area" class="login-dynamic-tips">珍惜只有一次的遊玩地球Online的機會</div>
+        </div>
+    </div>
     <div id="aboutModal" class="modal-overlay" onclick="closeModalOnOverlay(event, 'aboutModal')">
         <div class="modal-content">
             <div class="modal-header">關於 地球online</div>
@@ -947,10 +1068,21 @@
             document.getElementById('bgContainer').classList.add('shifted');
         }
 
+        // 全域計時器，用於登入畫面底部 Tips 輪播
+        let loginTipsInterval = null; 
+
         function navigateTo(targetScreenId) {
             document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
             document.getElementById(targetScreenId).classList.add('active');
             
+            // 如果離開了登入成功畫面，清除 Tips 的 Interval
+            if (targetScreenId !== 'login-character-screen') {
+                if (loginTipsInterval) {
+                    clearInterval(loginTipsInterval);
+                    loginTipsInterval = null;
+                }
+            }
+
             if (targetScreenId === 'menu-screen') {
                 earthMode = 'menu';
                 targetCameraZ = 250;
@@ -1014,7 +1146,7 @@
 
             document.getElementById('char-stats').innerHTML = `
                 <div class="stat-line"><span>體質</span><span class="stat-value">${constitution} / 100</span></div>
-                <div class="stat-line"><span>家境</span><span class="stat-value">$${wealth.toLocaleString()} HKD</span></div>
+                <div class="stat-line"><span>家境(月入)</span><span class="stat-value">$${wealth.toLocaleString()} HKD</span></div>
                 <div class="stat-line"><span>性別</span><span class="stat-value">${isMale ? '男' : '女'}</span></div>
             `;
 
@@ -1035,6 +1167,141 @@
             }
 
             document.getElementById('char-traits').innerHTML = traitsHtml;
+        }
+
+        // --- 登入控制邏輯 ---
+        function handleLogin() {
+            // 切換至全新角色狀態資訊畫面
+            navigateTo('login-character-screen');
+            
+            // 讓背景地球回正慢速旋轉，且拉近一些以在透明大廳中產生極佳視覺效果
+            document.getElementById('bgContainer').classList.remove('shifted');
+            earthMode = 'menu'; 
+            targetCameraZ = 160;
+
+            // 1. 性別隨機分配 (same as 註冊)
+            const isMale = Math.random() > 0.5;
+            document.getElementById('login-gender').innerText = isMale ? '男' : '女';
+
+            // 2. 家境(月入)隨機生成 (same as 註冊)
+            const wealth = Math.floor(Math.random() * 90001) + 10000;
+            document.getElementById('login-wealth').innerText = `$${wealth.toLocaleString()} HKD`;
+
+            // 3. 地區固定鎖定香港 (only hk lol)
+            document.getElementById('login-region').innerText = '香港';
+
+            // 4. 體質隨機區間 (65-100)
+            const constitution = Math.floor(Math.random() * 36) + 65;
+            document.getElementById('login-constitution').innerText = `${constitution} / 100`;
+
+            // 5. 遊玩年數隨機區間 (14-18)
+            const years = Math.floor(Math.random() * 5) + 14;
+            document.getElementById('login-years').innerText = `${years} 年`;
+
+            // 6. 愛情經驗精準演算隨機判定
+            let loveStatus = 'A0';
+            const loveRoll = Math.random() * 100;
+            
+            if (loveRoll < 50) { 
+                // A0 機率 50%，進一步判定客機型號衍生機率
+                const a0Roll = Math.random() * 100;
+                if (a0Roll < 15) loveStatus = 'A380';
+                else if (a0Roll < 15 + 3) loveStatus = 'A350';
+                else if (a0Roll < 15 + 3 + 1.5) loveStatus = 'A340';
+                else if (a0Roll < 15 + 3 + 1.5 + 3.5) loveStatus = 'A330';
+                else if (a0Roll < 15 + 3 + 1.5 + 3.5 + 3.5) loveStatus = 'A320';
+                else if (a0Roll < 15 + 3 + 1.5 + 3.5 + 3.5 + 1.5) loveStatus = 'A321';
+                else if (a0Roll < 15 + 3 + 1.5 + 3.5 + 3.5 + 1.5 + 1) loveStatus = 'A319';
+                else if (a0Roll < 15 + 3 + 1.5 + 3.5 + 3.5 + 1.5 + 1 + 0.5) loveStatus = 'A318';
+                else if (a0Roll < 15 + 3 + 1.5 + 3.5 + 3.5 + 1.5 + 1 + 0.5 + 0.4) loveStatus = 'A310';
+                else loveStatus = 'A0';
+            } else if (loveRoll < 50 + 40) { 
+                loveStatus = 'A1'; // 40%
+            } else if (loveRoll < 50 + 40 + 8) { 
+                loveStatus = 'A2'; // 8%
+            } else { 
+                loveStatus = 'A3'; // 2%
+            }
+            document.getElementById('login-love').innerText = loveStatus;
+
+            // 7. 成就演算法與渲染
+            let earnedAchievements = [];
+            
+            // (13%)「放學快綫」 亮黃色
+            if (Math.random() < 0.13) {
+                earnedAchievements.push({ title: '「放學快綫」', desc: '「放學即彈射走佬,極速歸家」', color: '#ffea00' });
+            }
+            // (3%)「不死之身」
+            if (Math.random() < 0.03) {
+                earnedAchievements.push({ title: '「不死之身」', desc: '「重傷/致命意外中生還」', color: '#ffffff' });
+            }
+            // (8%)「邊度有飛機」 天藍色
+            let isPlaneFan = false;
+            if (Math.random() < 0.08) {
+                isPlaneFan = true;
+                earnedAchievements.push({ title: '「邊度有飛機」', desc: '「成為飛機迷」', color: '#00b0ff' });
+            }
+            // (1%, 如果擁有「邊度有飛機」則變 85%)「特別飛機 200 OK」
+            const specialPlaneChance = isPlaneFan ? 0.85 : 0.01;
+            if (Math.random() < specialPlaneChance) {
+                earnedAchievements.push({ title: '「特別飛機 200 OK」', desc: '「成功影到一架特別飛機」', color: '#ffffff' });
+            }
+            // (39%)「跑得切」
+            if (Math.random() < 0.39) {
+                earnedAchievements.push({ title: '「跑得切」', desc: '「在遲到前3秒內入校」', color: '#ffffff' });
+            }
+            // (99%)「停課」
+            if (Math.random() < 0.99) {
+                earnedAchievements.push({ title: '「停課」', desc: '「感謝八號風球同紅雨」', color: '#ffffff' });
+            }
+            // (35%)「乘搭路上高鐵」
+            if (Math.random() < 0.35) {
+                earnedAchievements.push({ title: '「乘搭路上高鐵」', desc: '「搭過紅van」', color: '#ffffff' });
+            }
+            // (70%)「自主外出」
+            let canGoOut = false;
+            if (Math.random() < 0.70) {
+                canGoOut = true;
+                earnedAchievements.push({ title: '「自主外出」', desc: '「可以自己一個人出街」', color: '#ffffff' });
+            }
+            // (0%, 如果擁有「自主外出」則變 80%)「自主夜出」
+            const nightOutChance = canGoOut ? 0.80 : 0.00;
+            if (Math.random() < nightOutChance) {
+                earnedAchievements.push({ title: '「自主夜出」', desc: '「可以自己一個人夜晚出街」', color: '#ffffff' });
+            }
+
+            // 更新統計成就數量
+            document.getElementById('login-achievements-count').innerText = `${earnedAchievements.length} 個`;
+
+            // 輸出成就清單 DOM
+            const achListContainer = document.getElementById('login-achievements-list');
+            if (earnedAchievements.length === 0) {
+                achListContainer.innerHTML = `<div class="login-ach-item" style="color:rgba(255,255,255,0.4); text-align:center;">此角色過於平凡，未解鎖任何成就</div>`;
+            } else {
+                achListContainer.innerHTML = earnedAchievements.map(ach => `
+                    <div class="login-ach-item">
+                        <span class="login-ach-title" style="color: ${ach.color};">${ach.title}</span>
+                        <span class="login-ach-desc">${ach.desc}</span>
+                    </div>
+                `).join('');
+            }
+
+            // 8. 底部 Tips 輪播模組
+            const bottomTipsArray = [
+                "使用飛機可以切換伺服器",
+                "如身體任何模塊血量過低可以尋找醫生NPC",
+                "珍惜只有一次的遊玩地球Online的機會"
+            ];
+            
+            const tipsArea = document.getElementById('login-tips-area');
+            let currentTipIndex = 0;
+            tipsArea.innerText = bottomTipsArray[currentTipIndex];
+
+            if (loginTipsInterval) clearInterval(loginTipsInterval);
+            loginTipsInterval = setInterval(() => {
+                currentTipIndex = (currentTipIndex + 1) % bottomTipsArray.length;
+                tipsArea.innerText = bottomTipsArray[currentTipIndex];
+            }, 3000);
         }
     </script>
 </body>
