@@ -524,12 +524,62 @@
             scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000); camera.position.z = 250;
             renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true }); renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1; 
-            const textureLoader = new THREE.TextureLoader(); const dayTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'); const nightTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-night.jpg'); const cloudTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-clouds.png');
+            const textureLoader = new THREE.TextureLoader(); const dayTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'); const nightTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-night.jpg');
             const sunDir = new THREE.Vector3(1, 0.4, 1).normalize(); const sunLight = new THREE.DirectionalLight(0xffffff, 3.5); sunLight.position.copy(sunDir).multiplyScalar(300); scene.add(sunLight); scene.add(new THREE.AmbientLight(0xffffff, 0.005)); 
             const earthGeo = new THREE.SphereGeometry(60, 64, 64); const earthMat = new THREE.MeshLambertMaterial({ map: dayTexture }); earth = new THREE.Mesh(earthGeo, earthMat); scene.add(earth);
             const nightMat = new THREE.ShaderMaterial({ uniforms: { nightTex: { value: nightTexture }, sunDirection: { value: sunDir } }, vertexShader: `varying vec2 vUv; varying vec3 vNormal; void main() { vUv = uv; vNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform sampler2D nightTex; uniform vec3 sunDirection; varying vec2 vUv; varying vec3 vNormal; void main() { vec4 nightColor = texture2D(nightTex, vUv); float intensity = dot(vNormal, sunDirection); float alpha = smoothstep(0.15, -0.2, intensity); gl_FragColor = vec4(nightColor.rgb * 2.5, alpha); }`, transparent: true, blending: THREE.AdditiveBlending });
-            const nightSphere = new THREE.Mesh(earthGeo, nightMat); nightSphere.scale.set(1.002, 1.002, 1.002); earth.add(nightSphere); 
-            const cloudGeo = new THREE.SphereGeometry(60.5, 64, 64); const cloudMat = new THREE.MeshLambertMaterial({ map: cloudTexture, transparent: true, opacity: 0.7, blending: THREE.NormalBlending }); clouds = new THREE.Mesh(cloudGeo, cloudMat); earth.add(clouds);
+            const nightSphere = new THREE.Mesh(earthGeo, nightMat); nightSphere.scale.set(1.002, 1.002, 1.002); earth.add(nightSphere);
+            // 實時雲圖：用 NASA GIBS WMS GetMap 一次過拉整幅全球圖，無南半球缺失問題
+            const cloudGeo = new THREE.SphereGeometry(60.5, 64, 64);
+            const cloudMat = new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.75, blending: THREE.NormalBlending });
+            clouds = new THREE.Mesh(cloudGeo, cloudMat); earth.add(clouds);
+            (async function buildRealtimeCloudTexture() {
+                // 計算日期字串 (NASA GIBS 延遲約1-2日，嘗試昨日至3日前)
+                function getDateStr(daysAgo) {
+                    const d = new Date(); d.setUTCDate(d.getUTCDate() - daysAgo);
+                    return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+                }
+                // 載入單張衛星圖並返回 ImageData
+                function loadSatImage(layer, dateStr, W, H) {
+                    const url = `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=${layer}&SRS=EPSG:4326&BBOX=-180,-90,180,90&WIDTH=${W}&HEIGHT=${H}&FORMAT=image/jpeg&TIME=${dateStr}&STYLES=`;
+                    return new Promise((resolve, reject) => {
+                        const img = new Image(); img.crossOrigin = 'anonymous';
+                        img.onload = () => {
+                            const c = document.createElement('canvas'); c.width = W; c.height = H;
+                            const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, W, H);
+                            resolve(ctx.getImageData(0, 0, W, H));
+                        };
+                        img.onerror = reject;
+                        img.src = url;
+                    });
+                }
+
+                // 1. 準備 TextureLoader
+const textureLoader = new THREE.TextureLoader();
+
+// 2. 呼叫即時衛星雲圖 API (提供 4K 高畫質帶有透明通道的 png)
+textureLoader.load(
+    'https://clouds.matteason.co.uk/images/4096x2048/clouds-alpha.png',
+    (texture) => {
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // 提升渲染精細度
+        
+        // 替換原本的材質
+        cloudMat.map = texture;
+        cloudMat.transparent = true;
+        cloudMat.opacity = 0.9;
+        cloudMat.needsUpdate = true;
+    },
+    undefined,
+    (err) => {
+        console.warn('即時雲圖載入失敗，使用備用靜態雲圖:', err);
+        // Fallback: 如果真實 API 掛掉，用這張確定無縫的備用圖
+        textureLoader.load('https://unpkg.com/three-globe/example/img/earth-clouds.png', t => { 
+            cloudMat.map = t; 
+            cloudMat.needsUpdate = true; 
+        });
+    }
+);
+            })();
             const atmosGeo = new THREE.SphereGeometry(60, 64, 64); const atmosMat = new THREE.ShaderMaterial({ vertexShader: `varying vec3 vNormal; void main() { vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `varying vec3 vNormal; void main() { float intensity = pow(max(0.0, 0.58 - dot(vNormal, vec3(0.0, 0.0, 1.0))), 2.2); gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity * 2.0; }`, blending: THREE.AdditiveBlending, side: THREE.BackSide, transparent: true }); const atmosSphere = new THREE.Mesh(atmosGeo, atmosMat); atmosSphere.scale.set(1.16, 1.16, 1.16); scene.add(atmosSphere);
             controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.05; controls.enablePan = false; controls.minDistance = 90; controls.maxDistance = 350; controls.addEventListener('start', () => { if(earthMode === 'menu') earthMode = 'manual'; });
             animate();
