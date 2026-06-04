@@ -634,7 +634,7 @@
             if (loveRoll < 75) { 
                 const a0Roll = Math.random() * 100;
                 if (a0Roll < 15) loveStatus = 'A380'; else if (a0Roll < 18) loveStatus = 'A350'; else if (a0Roll < 19.5) loveStatus = 'A340'; else if (a0Roll < 23) loveStatus = 'A330'; else if (a0Roll < 26.5) loveStatus = 'A320'; else if (a0Roll < 28) loveStatus = 'A321'; else if (a0Roll < 29) loveStatus = 'A319'; else if (a0Roll < 29.5) loveStatus = 'A318'; else if (a0Roll < 29.9) loveStatus = 'A310'; else loveStatus = 'A0';
-            } else if (loveRoll < 85) loveStatus = 'A1'; else if (loveRoll < 95) loveStatus = 'A2'; else loveStatus = 'A3'; 
+            } else if (loveRoll < 87) loveStatus = 'A1'; else if (loveRoll < 98) loveStatus = 'A2'; else loveStatus = 'A3'; 
             playerContext.love = loveStatus;
             document.getElementById('login-love').innerText = loveStatus;
 
