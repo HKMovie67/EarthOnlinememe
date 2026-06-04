@@ -15,6 +15,13 @@
       "type": "good"
     },
     {
+      "id": "low_res",
+      "title": "次級顯示",
+      "desc": "更易降低分辨率",
+      "prob": 0.19,
+      "type": ""
+    },
+    {
       "id": "asian_parent",
       "title": "亞洲家長",
       "desc": "地獄難度",
