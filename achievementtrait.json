@@ -1,18 +1,94 @@
 {
   "traits": [
-    { "id": "adhd", "name": "ADHD", "desc": "隨機移動,有機會中途突然彈出小遊戲", "chance": 0.15, "type": "neutral" },
-    { "id": "asd", "name": "ASD", "desc": "不提供原裝社交潛規則理解系統,有高機會在專業副本如「航空」,「巴士」等等提前獲得資訊", "chance": 0.13, "type": "good" },
-    { "id": "asian_parents", "name": "亞洲家長", "desc": "地獄難度", "chance": 0.10, "type": "default" }
+    {
+      "id": "adhd",
+      "title": "ADHD",
+      "desc": "隨機移動,有機會中途突然彈出小遊戲",
+      "prob": 0.15,
+      "type": "neutral"
+    },
+    {
+      "id": "asd",
+      "title": "ASD",
+      "desc": "不提供原裝社交潛規則理解系統,有高機會在專業副本如「航空」,「巴士」等等提前獲得資訊",
+      "prob": 0.13,
+      "type": "good"
+    },
+    {
+      "id": "asian_parent",
+      "title": "亞洲家長",
+      "desc": "地獄難度",
+      "prob": 0.10,
+      "type": ""
+    }
   ],
   "achievements": [
-    { "id": "school_runner", "name": "「放學快綫」", "desc": "「放學即彈射走佬,極速歸家」", "chance": 0.13, "color": "#ffea00" },
-    { "id": "immortal", "name": "「不死之身」", "desc": "「重傷/致命意外中生還」", "chance": 0.03, "color": "#ffffff" },
-    { "id": "avgeek", "name": "「邊度有飛機」", "desc": "「成為飛機迷」", "chance": 0.08, "color": "#00b0ff" },
-    { "id": "special_plane", "name": "「特別飛機 200 OK」", "desc": "「成功影到一架特別飛機」", "chance": 0.01, "conditional_chance": 0.85, "depends_on": "avgeek", "color": "#ffffff" },
-    { "id": "run_fast", "name": "「跑得切」", "desc": "「在遲到前3秒內入校」", "chance": 0.39, "color": "#ffffff" },
-    { "id": "school_suspend", "name": "「停課」", "desc": "「感謝八號風球同紅雨」", "chance": 0.99, "color": "#ffffff" },
-    { "id": "red_van", "name": "「乘搭路上高鐵」", "desc": "「搭過紅van」", "chance": 0.35, "color": "#ffffff" },
-    { "id": "go_out", "name": "「自主外出」", "desc": "「可以自己一個人出街」", "chance": 0.70, "color": "#ffffff" },
-    { "id": "night_out", "name": "「自主夜出」", "desc": "「可以自己一個人夜晚出街」", "chance": 0.0, "conditional_chance": 0.80, "depends_on": "go_out", "color": "#ffffff" }
+    {
+      "id": "school_run",
+      "title": "「放學快綫」",
+      "desc": "「放學即彈射走佬,極速歸家」",
+      "prob": 0.13,
+      "color": "#ffea00"
+    },
+    {
+      "id": "undead",
+      "title": "「不死之身」",
+      "desc": "「重傷/致命意外中生還」",
+      "prob": 0.03,
+      "color": "#ffffff"
+    },
+    {
+      "id": "plane_fan",
+      "title": "「邊度有飛機」",
+      "desc": "「成為飛機迷」",
+      "prob": 0.08,
+      "color": "#00b0ff"
+    },
+    {
+      "id": "special_plane",
+      "title": "「特別飛機 200 OK」",
+      "desc": "「成功影到一架特別飛機」",
+      "prob": 0.01,
+      "color": "#ffffff",
+      "conditional_on": "plane_fan",
+      "conditional_prob": 0.85
+    },
+    {
+      "id": "run_in_time",
+      "title": "「跑得切」",
+      "desc": "「在遲到前3秒內入校」",
+      "prob": 0.39,
+      "color": "#ffffff"
+    },
+    {
+      "id": "typhoon",
+      "title": "「停課」",
+      "desc": "「感謝八號風球同紅雨」",
+      "prob": 0.99,
+      "color": "#ffffff"
+    },
+    {
+      "id": "red_van",
+      "title": "「乘搭路上高鐵」",
+      "desc": "「搭過紅van」",
+      "prob": 0.35,
+      "color": "#ffffff"
+    },
+    {
+      "id": "go_out",
+      "title": "「自主外出」",
+      "desc": "「可以自己一個人出街」",
+      "prob": 0.70,
+      "color": "#ffffff"
+    },
+    {
+      "id": "night_out",
+      "title": "「自主夜出」",
+      "desc": "「可以自己一個人夜晚出街」",
+      "prob": 0.00,
+      "color": "#ffffff",
+      "conditional_on": "go_out",
+      "conditional_prob": 0.80
+    }
   ]
 }
