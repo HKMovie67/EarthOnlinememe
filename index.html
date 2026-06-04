@@ -216,6 +216,7 @@
 
         .mission-card.greyed-out { opacity: 0.5; filter: grayscale(1); cursor: not-allowed; }
         .mission-empty { font-size: 0.85rem; color: rgba(255,255,255,0.4); font-style: italic; padding: 10px; width: 100%; text-align: center; }
+
         /* 自定義 Toast */
         .toast-container { position: fixed; top: 30px; right: 40px; display: flex; flex-direction: column; gap: 12px; z-index: 9999; pointer-events: none; max-width: 360px; width: calc(100% - 80px); }
         .toast { background: linear-gradient(135deg, rgba(10, 20, 35, 0.9) 0%, rgba(5, 10, 15, 0.95) 100%); color: #ffffff; padding: 16px 20px; border-radius: 8px; backdrop-filter: blur(10px); pointer-events: auto; opacity: 0; transform: translateX(40px); transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); font-size: 0.9rem; line-height: 1.5; letter-spacing: 1px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -248,9 +249,17 @@
             .content-list { max-height: 42vh; gap: 8px; margin-bottom: 10px; }
             .server-name { font-size: 0.85rem; }
             .toast-container { top: auto; bottom: 20px; right: 20px; max-width: 320px; }
+            .char-section { padding: 10px 20px; margin-bottom: 10px; }
+            .stat-line { margin-bottom: 5px; font-size: 0.95rem; }
+            .trait-box { padding: 8px 12px; margin-bottom: 6px; }
+            .spawn-overlay { padding: 10px 20px; width: 280px; }
+            .spawn-title { font-size: 1.5rem; }
+            .spawn-location { font-size: 1.2rem; margin-bottom: 5px; }
+            .spawn-desc { font-size: 0.8rem; margin-bottom: 15px; }
             .login-sleep-status { font-size: 1.15rem; }
             .login-dynamic-tips { font-size: 0.95rem; }
             .top-mission-btn { top: 15px; padding: 8px 25px; font-size: 0.95rem; }
+        }
     </style>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -548,7 +557,15 @@
 
         function startLoadingSequence() {
             const progressBar = document.getElementById('progressBar'); const progressStatus = document.getElementById('progressStatus'); const tips = document.getElementById('tips');
-            let currentProgress = 0; const totalDuration = 13000; const startTime = Date.now(); let tipIndex = 0; tips.innerText = loadingTipsData[0] || "加載資料中...";
+            let currentProgress = 0; const totalDuration = 13000; const startTime = Date.now(); 
+
+            // 將 loadingTipsData 均勻隨機打亂 (Fisher-Yates 洗牌)
+            for (let i = loadingTipsData.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [loadingTipsData[i], loadingTipsData[j]] = [loadingTipsData[j], loadingTipsData[i]];
+            }
+
+            let tipIndex = 0; tips.innerText = loadingTipsData[0] || "加載資料中...";
             const tipInterval = setInterval(() => { tipIndex = (tipIndex + 1) % loadingTipsData.length; tips.innerText = loadingTipsData[tipIndex]; }, 3000);
             function updateProgress() {
                 const elapsedTime = Date.now() - startTime;
@@ -634,7 +651,7 @@
             if (loveRoll < 75) { 
                 const a0Roll = Math.random() * 100;
                 if (a0Roll < 15) loveStatus = 'A380'; else if (a0Roll < 18) loveStatus = 'A350'; else if (a0Roll < 19.5) loveStatus = 'A340'; else if (a0Roll < 23) loveStatus = 'A330'; else if (a0Roll < 26.5) loveStatus = 'A320'; else if (a0Roll < 28) loveStatus = 'A321'; else if (a0Roll < 29) loveStatus = 'A319'; else if (a0Roll < 29.5) loveStatus = 'A318'; else if (a0Roll < 29.9) loveStatus = 'A310'; else loveStatus = 'A0';
-            } else if (loveRoll < 87) loveStatus = 'A1'; else if (loveRoll < 98) loveStatus = 'A2'; else loveStatus = 'A3'; 
+            } else if (loveRoll < 85) loveStatus = 'A1'; else if (loveRoll < 95) loveStatus = 'A2'; else loveStatus = 'A3'; 
             playerContext.love = loveStatus;
             document.getElementById('login-love').innerText = loveStatus;
 
@@ -649,6 +666,12 @@
             if (earnedAchievements.length === 0) achListContainer.innerHTML = `<div class="login-ach-item" style="color:rgba(255,255,255,0.4); text-align:center;">此角色過於平凡，未解鎖任何成就</div>`;
             else achListContainer.innerHTML = earnedAchievements.map(ach => `<div class="login-ach-item"><span class="login-ach-title" style="color: ${ach.color};">${ach.title}</span><span class="login-ach-desc">${ach.desc}</span></div>`).join('');
 
+            // 將 waitingTipsData 均勻隨機打亂 (Fisher-Yates 洗牌)
+            for (let i = waitingTipsData.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [waitingTipsData[i], waitingTipsData[j]] = [waitingTipsData[j], waitingTipsData[i]];
+            }
+
             const tipsArea = document.getElementById('login-tips-area'); let currentTipIndex = 0; tipsArea.innerText = waitingTipsData[currentTipIndex] || "";
             if (loginTipsInterval) clearInterval(loginTipsInterval);
             if (waitingTipsData.length > 0) { loginTipsInterval = setInterval(() => { currentTipIndex = (currentTipIndex + 1) % waitingTipsData.length; tipsArea.innerText = waitingTipsData[currentTipIndex]; }, 3000); }
@@ -662,13 +685,11 @@
             activeMissions = missionsData.map(m => {
                 let done = Math.floor(Math.random() * (m.random_done_max - m.random_done_min + 1)) + m.random_done_min;
                 
-                // 強制滿次數條件
                 if (m.force_max_done_condition && evaluateCondition(m.force_max_done_condition, playerContext)) {
                     done = m.max_attempts;
                 }
-                // 強制歸零條件 (例如：A0 玩家拍拖次數必須為 0)
                 if (m.force_zero_condition && evaluateCondition(m.force_zero_condition, playerContext)) {
-                  done = 0;
+                    done = 0;
                 }
 
                 let status = 'available';
@@ -678,7 +699,6 @@
                     status = 'progress';
                 }
 
-                // 檢查 Warning 條件是否成立
                 let showWarning = false;
                 if (m.warning_condition && evaluateCondition(m.warning_condition, playerContext)) {
                     showWarning = true;
@@ -702,11 +722,9 @@
             let avail = activeMissions.filter(m => m.status === 'available');
             let maxed = activeMissions.filter(m => m.status === 'maxed');
 
-            // 渲染進行中
             if (progressMissions.length === 0) inProgressList.innerHTML = '<div class="mission-empty">目前沒有進行中的任務</div>';
             else progressMissions.forEach(m => inProgressList.appendChild(createMissionCard(m)));
 
-            // 渲染可選 (Maxed 墊底)
             const combinedAvailable = [...avail, ...maxed];
             if (combinedAvailable.length === 0) availableList.innerHTML = '<div class="mission-empty">目前沒有可接取的任務</div>';
             else combinedAvailable.forEach(m => availableList.appendChild(createMissionCard(m)));
@@ -736,12 +754,10 @@
             let m = activeMissions.find(x => x.id === id);
             if (!m || m.status !== 'available') return;
             
-            // 如果觸發 Warning，彈出 Toast 提示
             if (m.showWarning && m.warning_text) {
                 showToast('任務警告', m.warning_text, 'warning');
             }
 
-            // 修改狀態為進行中並重新渲染
             m.status = 'progress';
             renderMissions();
         }
