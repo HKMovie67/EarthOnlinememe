@@ -1,0 +1,53 @@
+{
+  "missions": [
+    {
+      "id": "dating",
+      "name": "拍拖",
+      "desc": "找一位異性朋友",
+      "reward": "社交能力+9",
+      "max_attempts": 4,
+      "random_done_min": 0,
+      "random_done_max": 2,
+      "in_progress_prob": 0.20,
+      "warning_condition": "love === 'A0' || love.startsWith('A3')",
+      "warning_text": "⚠角色可能沒有足夠社交能力,社交能量,經濟能力或欲望"
+    },
+    {
+      "id": "f1_school",
+      "name": "一級方程式放學",
+      "desc": "放學到校門破1:00",
+      "reward": "體質+5 反應+7",
+      "max_attempts": 5,
+      "random_done_min": 0,
+      "random_done_max": 5,
+      "force_max_done_condition": "achievements.includes('school_run')",
+      "in_progress_prob": 0.33,
+      "warning_condition": "false",
+      "warning_text": ""
+    },
+    {
+      "id": "run_10k",
+      "name": "10km",
+      "desc": "連續跑10km",
+      "reward": "體質+8",
+      "max_attempts": 6,
+      "random_done_min": 0,
+      "random_done_max": 6,
+      "in_progress_prob": 0.30,
+      "warning_condition": "constitution < 60",
+      "warning_text": "⚠量力而為"
+    },
+    {
+      "id": "bus_guide",
+      "name": "路線指路",
+      "desc": "在巴士司機迷路時指路",
+      "reward": "空間感+8 空間記憶 +25",
+      "max_attempts": 3,
+      "random_done_min": 0,
+      "random_done_max": 3,
+      "in_progress_prob": 0.05,
+      "warning_condition": "false",
+      "warning_text": ""
+    }
+  ]
+}
