@@ -10,7 +10,7 @@
       "random_done_max": 2,
       "in_progress_prob": 0.20,
       "force_zero_condition": "love === 'A0'",
-      "warning_condition": "love === 'A0' || love.startsWith('A3')",
+      "warning_condition": "love === 'A0' || love === 'A310' || love === 'A318' || love === 'A319 || love === 'A320' || love === 'A321' || love === 'A330' || love === 'A340' || love === 'A350 || love === 'A380 || love.startsWith('A3')",
       "warning_text": "⚠角色可能沒有足夠社交能力,社交能量,經濟能力或欲望"
     },
     {
