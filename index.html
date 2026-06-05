@@ -530,7 +530,7 @@ renderer.toneMappingExposure = 1.6;
 
 const textureLoader = new THREE.TextureLoader(); 
 const dayTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'); 
-const nightTexture = textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_lights_2048.png');
+const nightTexture = textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/planets/earth_lights_2048.png');
 const bumpMap = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-topology.png'); 
 // 新增：載入代碼中遺漏的水體反光貼圖 (Water Map) 以增強海面質感
 const waterMap = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-water.png');
@@ -541,7 +541,7 @@ const sunLight = new THREE.DirectionalLight(0xffffff, 8.0);
 sunLight.position.copy(sunDir).multiplyScalar(300); 
 scene.add(sunLight); 
 // 將環境光大幅調低，讓暗面「再暗啲」
-scene.add(new THREE.AmbientLight(0x0a1525, 0.005));
+scene.add(new THREE.AmbientLight(0x000000, 0.0)); // 徹底關閉環境光，確保暗面純黑
 
 const earthGeo = new THREE.SphereGeometry(60, 64, 64); 
 
@@ -579,20 +579,19 @@ scene.add(earth);
                     void main() { 
                         vec4 nightColor = texture2D(nightTex, vUv); 
                         
-                        // 修正：因為新貼圖背景是純黑，這裡直接乘以 6.0 放大倍數，
-                        // 城市燈光就會非常清晰明亮，且絕對不會把背光面照亮洗白！
-                        vec3 cityLights = nightColor.rgb * 6.0; 
+                        // 🎯 核心修正：使用 pow(顏色, vec3(4.5)) 高次方公式
+                        // 0.1(微弱藍色) 的 4.5 次方會變成 0.00003，直接變成絕對純黑！
+                        // 0.9(明亮路燈) 的 4.5 次方依然保留 0.62，再乘以 25.0 就會變得極之金黃耀眼！
+                        vec3 cityLights = pow(nightColor.rgb, vec3(4.5)) * 25.0; 
                         
                         float intensity = dot(vNormal, sunDirection); 
-                        // 控制日夜交界處的過渡（當遠離太陽時才顯示夜燈）
-                        float alpha = smoothstep(0.05, -0.20, intensity); 
+                        float alpha = smoothstep(0.15, -0.2, intensity); 
                         
                         gl_FragColor = vec4(cityLights, alpha); 
                     }
                 `, 
                 transparent: true, 
-                blending: THREE.AdditiveBlending,
-                depthWrite: false
+                blending: THREE.AdditiveBlending // 黑色(0,0,0)喺呢個模式下會完全透明，不留痕跡
             });
             const nightSphere = new THREE.Mesh(earthGeo, nightMat); nightSphere.scale.set(1.002, 1.002, 1.002); earth.add(nightSphere);
             // 實時雲圖：用 NASA GIBS WMS GetMap 一次過拉整幅全球圖，無南半球缺失問題
