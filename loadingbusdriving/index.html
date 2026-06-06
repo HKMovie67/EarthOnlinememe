@@ -30,8 +30,8 @@
 <script>
 (function() {
     const canvas = document.getElementById('bus-canvas');
-    const ctx = canvas.getContext('2d');
-    
+// 🟢 加入 { alpha: true }，強制告訴顯示卡呢個畫布要支援透明底
+const ctx = canvas.getContext('2d', { alpha: true });
     // ==========================================
     // 🚦 核心切換與交通設定
     // ==========================================
