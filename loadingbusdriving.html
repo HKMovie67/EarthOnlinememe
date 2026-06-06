@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tech Bus AI - Nested Sub-Decision Engine</title>
+<style>
+    body, html {
+    margin: 0; padding: 0;
+    overflow: hidden; /* 防止出現側邊 scrollbar */
+    background-color: #050505;
+}
+#bus-loading-screen {
+    position: relative; /* 改為相對定位，跟隨 canvas 大細 */
+    width: 100%; height: 100%;
+    background: transparent; overflow: hidden;
+    display: flex; justify-content: center; align-items: center;
+}
+    #bus-canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<div id="bus-loading-screen">
+    <canvas id="bus-canvas"></canvas>
+</div>
+
+<script>
+(function() {
+    const canvas = document.getElementById('bus-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // ==========================================
+    // 🚦 核心切換與交通設定
+    // ==========================================
+    // ==========================================
+// 🚦 核心切換與交通設定 (支援 URL 參數讀取)
+// ==========================================
+const urlParams = new URLSearchParams(window.location.search);
+// 網址有 ?van=false 就係大巴，否則預設係小巴 (true)
+const IS_RED_VAN_MODE = urlParams.get('van') !== 'false'; 
+
+// 讀取網址傳入嘅自訂寬高，如果冇傳入就預設用視窗大小
+const CUSTOM_WIDTH = parseInt(urlParams.get('w')) || window.innerWidth;
+const CUSTOM_HEIGHT = parseInt(urlParams.get('h')) || window.innerHeight;
+
+    const TRAFFIC_CONFIG = {
+        maxVehicles: 75,         
+        spawnRate: 0.23,         
+        carRatio: 0.67,          
+        busRatio: 0.33           
+    };
+
+    const BUS_SPEED_LIMIT = 19444; 
+    const VAN_SPEED_LIMIT = 41666; 
+
+    const PLAYER_CFG = IS_RED_VAN_MODE ? {
+        w: 2080, wb: 3935, fo: 1000, ro: 2055, bg: 0,
+        treadFront: 1690, treadRear: 1490,
+        speed: VAN_SPEED_LIMIT, color: '#ff3333', shadow: '#ff0000', length: 6990
+    } : {
+        w: 2550, wb: 6400, fo: 2418, ro: 2482, bg: 1500, 
+        treadFront: 2250, treadRear: 2250,
+        speed: BUS_SPEED_LIMIT, color: '#ffffff', shadow: '#ffffff', length: 12800
+    };
+
+    const LANE_W = 3500; 
+    let scale = 1; 
+    let lastTime = performance.now();
+    let path = [];
+    let max_s = -200000; 
+
+    let bus = {
+        isPlayer: true, x: 0, y: 0, heading: 0, s: 0, 
+        baseSpeed: PLAYER_CFG.speed, currentSpeed: PLAYER_CFG.speed, 
+        steeringAngle: 0, targetLane: 1, currentLane: 1,
+        w: PLAYER_CFG.w, length: PLAYER_CFG.length,
+        wb: PLAYER_CFG.wb, fo: PLAYER_CFG.fo, ro: PLAYER_CFG.ro, bg: PLAYER_CFG.bg,
+        isBraking: false, isEmergency: false
+    };
+
+    let camHeading = 0;
+    let aiCars = [];
+
+    function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    
+    // 設定 Canvas 的實體渲染像素大細
+    canvas.width = CUSTOM_WIDTH * dpr;
+    canvas.height = CUSTOM_HEIGHT * dpr;
+    
+    // 設定 CSS 顯示大細，等佢唔會爆開
+    canvas.style.width = CUSTOM_WIDTH + "px";
+    canvas.style.height = CUSTOM_HEIGHT + "px";
+    
+    // 根據傳入嘅高度動態縮放物理世界
+    scale = CUSTOM_HEIGHT / 60000 * dpr; 
+}
+    window.addEventListener('resize', resize);
+    resize();
+
+    function generatePath(upTo) {
+        if (path.length === 0) path.push({x: 0, y: 0, heading: 0, s: max_s});
+        while (max_s < upTo) {
+            let last = path[path.length - 1];
+            let ds = 5000; 
+            let curvature = Math.sin(max_s * 0.000002) * 0.0000025 + Math.sin(max_s * 0.0000008) * 0.000001;
+            let heading = last.heading + curvature * ds;
+            let x = last.x + Math.cos(heading) * ds;
+            let y = last.y + Math.sin(heading) * ds;
+            path.push({x, y, heading, s: max_s + ds});
+            max_s += ds;
+        }
+        while (path.length > 2 && path[1].s < bus.s - 200000) path.shift();
+    }
+
+    function getPathPoint(s) {
+        for (let i = 0; i < path.length - 1; i++) {
+            if (s >= path[i].s && s < path[i+1].s) {
+                let p1 = path[i], p2 = path[i+1];
+                let t = (s - p1.s) / (p2.s - p1.s);
+                return {
+                    x: p1.x + (p2.x - p1.x) * t,
+                    y: p1.y + (p2.y - p1.y) * t,
+                    heading: p1.heading + (p2.heading - p1.heading) * t
+                };
+            }
+        }
+        return path[path.length - 1] || {x:0, y:0, heading:0};
+    }
+
+    function getForwardGap(ego, other, testLaneOffset) {
+        let e_f = ego.s + (ego.isPlayer ? ego.wb + ego.fo : ego.length * 0.75);
+        let e_r = ego.s - (ego.isPlayer ? (ego.bg || 0) + ego.ro : ego.length * 0.25);
+        let o_f = other.s + (other.isPlayer ? other.wb + other.fo : other.length * 0.75);
+        let o_r = other.s - (other.isPlayer ? (other.bg || 0) + other.ro : other.length * 0.25);
+
+        let w1 = ego.w || ego.width; let w2 = other.w || other.width;
+        let l1 = testLaneOffset * LANE_W; let l2 = other.currentLane * LANE_W;
+        let l2_target = other.targetLane * LANE_W; 
+        
+        let latOverlapCurrent = Math.abs(l1 - l2) < (w1/2 + w2/2 + 400);
+        let latOverlapTarget = Math.abs(l1 - l2_target) < (w1/2 + w2/2 + 400);
+        
+        if (latOverlapCurrent || latOverlapTarget) {
+            if (o_r > e_f) return o_r - e_f; 
+            if (o_f < e_r) return Infinity;  
+            return -1; 
+        }
+        return Infinity; 
+    }
+
+    // 🛑 核心：單步即時動態與碰撞檢測 (計埋其他車Future位置)
+    function checkInstantCrash(simEgo, vehicles, simTime, egoW, egoWb, egoFo, egoBg, egoRo) {
+        let eF = simEgo.s + (egoWb + egoFo) * 1.05;
+        let eR = simEgo.s - ((egoBg || 0) + egoRo) * 1.05;
+        let eW = egoW * 1.08;
+
+        for (let car of vehicles) {
+            let carS = car.s + car.currentSpeed * simTime;
+            let carProgress = Math.min(1, simTime * 1.2);
+            let carLane = car.currentLane + (car.targetLane - car.currentLane) * carProgress;
+            
+            let cF = carS + car.length * 0.75;
+            let cR = carS - car.length * 0.25;
+            
+            let latOverlap = Math.abs((simEgo.currentLane - carLane) * LANE_W) < (eW/2 + car.width/2 + 450);
+            if (latOverlap && cR <= eF && cF >= eR) {
+                return true; 
+            }
+        }
+        return false;
+    }
+
+    // 🔮 雙層大腦預測：2.5s 總模擬 + 0.2s 內嵌子決策更新
+    function checkFutureCollisionWithSubDecisions(ego, macroTargetLane, vehicles, isMacroEmergency = false) {
+        const duration = 2.5; 
+        const dt = 0.1; // 0.1s 一個 Step
+        const totalSteps = Math.round(duration / dt);
+
+        // 計算道路安全邊界線 (費事貼牆或者衝出路肩)
+        const laneSafetyMargin = (ego.w / 2) / LANE_W;
+        const MIN_ALLOWED_LANE = -1.5 + laneSafetyMargin;
+        const MAX_ALLOWED_LANE = 1.5 - laneSafetyMargin;
+
+        // 複製宏觀初始物理狀態
+        let simEgo = {
+            x: ego.x, y: ego.y, heading: ego.heading, s: ego.s,
+            currentLane: ego.currentLane, targetLane: macroTargetLane,
+            currentSpeed: ego.currentSpeed, steeringAngle: ego.steeringAngle,
+            isBraking: isMacroEmergency, intensityBonus: false
+        };
+
+        for (let step = 0; step < totalSteps; step++) {
+            let t = step * dt;
+
+            // ==========================================
+            // 🧠 子決策觸發點：每 0.2s 做一次重新自我診斷 (Step 0, 2, 4...)
+            // ==========================================
+            if (step % 2 === 0) {
+                // 子決策微型預測：向後看 0.2s (2個 0.1s step)
+                let microCrashImminent = false;
+                let microEgo = { currentLane: simEgo.currentLane, s: simEgo.s };
+                let microSpeed = simEgo.currentSpeed;
+                let microLane = simEgo.currentLane;
+
+                for (let u = 1; u <= 2; u++) {
+                    let futureT = t + (u * dt);
+                    if (simEgo.isBraking) microSpeed = Math.max(0, microSpeed - 25000 * dt);
+                    microEgo.s += microSpeed * dt;
+                    
+                    let microLerp = Math.max(1.0, Math.min(4.5, 60000 / Math.max(5000, microSpeed)));
+                    microLane += (simEgo.targetLane - microLane) * microLerp * dt;
+                    microEgo.currentLane = Math.max(MIN_ALLOWED_LANE, Math.min(MAX_ALLOWED_LANE, microLane));
+
+                    if (checkInstantCrash(microEgo, vehicles, futureT, ego.w, ego.wb, ego.fo, ego.bg, ego.ro)) {
+                        microCrashImminent = true;
+                        break;
+                    }
+                }
+
+                // 子決策調整機制：如果黎緊 0.2s 會撞，即時調整虛擬替身嘅行車方針！
+                if (microCrashImminent) {
+                    simEgo.isBraking = true; // 1. 子決策：即時重Brake
+                    simEgo.intensityBonus = true; // 2. 子決策：加強轉軚 (Dont be too intense)
+                    
+                    // 3. 子決策：修訂微線道 (向威脅較低嘅一側扭)
+                    let leftThreat = checkInstantCrash({s: simEgo.s, currentLane: Math.max(MIN_ALLOWED_LANE, simEgo.currentLane - 0.2)}, vehicles, t+0.1, ego.w, ego.wb, ego.fo, ego.bg, ego.ro);
+                    if (leftThreat) {
+                        simEgo.targetLane = Math.min(MAX_ALLOWED_LANE, simEgo.targetLane + 0.25);
+                    } else {
+                        simEgo.targetLane = Math.max(MIN_ALLOWED_LANE, simEgo.targetLane - 0.25);
+                    }
+                }
+            }
+
+            // ==========================================
+            // 🏎️ 替身物理推算 (Kinematic Core)
+            // ==========================================
+            let desiredSpeed = ego.baseSpeed;
+            if (simEgo.isBraking) desiredSpeed = 0; 
+
+            let accel = (ego.isPlayer && IS_RED_VAN_MODE) ? 8000 : 3000;
+            let decel = simEgo.isBraking ? 40000 : 5000;
+
+            if (simEgo.currentSpeed < desiredSpeed) {
+                simEgo.currentSpeed = Math.min(desiredSpeed, simEgo.currentSpeed + accel * dt);
+            } else if (simEgo.currentSpeed > desiredSpeed) {
+                simEgo.currentSpeed = Math.max(desiredSpeed, simEgo.currentSpeed - decel * dt);
+            }
+
+            let laneLerpSpeed = Math.max(1.0, Math.min(4.5, 60000 / Math.max(5000, simEgo.currentSpeed)));
+            if (simEgo.intensityBonus) laneLerpSpeed *= 1.6; // 加強轉軚，但克制住 (維持喺1.6倍，不致於太激烈)
+
+            simEgo.currentLane += (simEgo.targetLane - simEgo.currentLane) * laneLerpSpeed * dt;
+            
+            // 🛡️ 邊界鎖定：模擬世界入面絕對不可出界
+            simEgo.currentLane = Math.max(MIN_ALLOWED_LANE, Math.min(MAX_ALLOWED_LANE, simEgo.currentLane));
+
+            let lookAhead = Math.max(8000, Math.min(25000, 30000 * 0.5));
+            let targetPt = getPathPoint(simEgo.s + lookAhead);
+            let targetX = targetPt.x + Math.cos(targetPt.heading - Math.PI/2) * (simEgo.currentLane * LANE_W);
+            let targetY = targetPt.y + Math.sin(targetPt.heading - Math.PI/2) * (simEgo.currentLane * LANE_W);
+
+            let dx = targetX - simEgo.x; let dy = targetY - simEgo.y;
+            let localX = dx * Math.cos(-simEgo.heading) - dy * Math.sin(-simEgo.heading);
+            let localY = dx * Math.sin(-simEgo.heading) + dy * Math.cos(-simEgo.heading);
+
+            let alpha = Math.atan2(localY, localX);
+            simEgo.steeringAngle = Math.atan2(2 * ego.wb * Math.sin(alpha), lookAhead);
+            
+            let maxSteer = (IS_RED_VAN_MODE ? 48 : 35) * Math.PI / 180;
+            if (simEgo.intensityBonus) maxSteer = 53 * Math.PI / 180; // 控制最高軚角，避免翻車抽飛
+            simEgo.steeringAngle = Math.max(-maxSteer, Math.min(maxSteer, simEgo.steeringAngle));
+
+            simEgo.x += simEgo.currentSpeed * Math.cos(simEgo.heading) * dt;
+            simEgo.y += simEgo.currentSpeed * Math.sin(simEgo.heading) * dt;
+            simEgo.heading += (simEgo.currentSpeed / ego.wb) * Math.tan(simEgo.steeringAngle) * dt;
+            simEgo.s += simEgo.currentSpeed * dt;
+
+            // 檢查經過子決策微調後，呢一步仲會唔會發生碰撞
+            if (checkInstantCrash(simEgo, vehicles, t, ego.w, ego.wb, ego.fo, ego.bg, ego.ro)) {
+                return t; 
+            }
+        }
+        return Infinity; 
+    }
+
+    function checkLaneClearForAI(ego, targetL, vehicles, frontSafe, rearSafe) {
+        for(let v of vehicles) {
+            if (v === ego) continue;
+            if (Math.abs(v.currentLane - targetL) < 0.8 || Math.abs(v.targetLane - targetL) < 0.8) {
+                let gap = v.s - ego.s;
+                if (gap > 0 && gap < frontSafe) return false; 
+                if (gap < 0 && gap > -rearSafe) return false; 
+            }
+        }
+        return true;
+    }
+
+    function spawnSingleCar(spawnS) {
+        let isHeavy = Math.random() < TRAFFIC_CONFIG.busRatio; 
+        let isSlowBus = false;
+        
+        let baseSpd, length, width, preferredLane;
+        if (isHeavy) {
+            if (Math.random() < 0.20) {
+                isSlowBus = true;
+                baseSpd = 11000 + Math.random() * 1500; 
+            } else {
+                baseSpd = 17544 + Math.random() * 2000; 
+            }
+            length = 12000; width = 2550;
+            preferredLane = 1; 
+        } else {
+            baseSpd = 21000 + Math.random() * 4000; 
+            length = 4500; width = 1800;
+            preferredLane = 0; 
+        }
+
+        let safeToSpawn = true;
+        for (let v of [bus, ...aiCars]) {
+            if (Math.abs(v.s - spawnS) < 18500 && Math.abs(v.currentLane - preferredLane) <= 1.2) {
+                safeToSpawn = false; break;
+            }
+        }
+
+        if (safeToSpawn) {
+            let spawnPt = getPathPoint(spawnS);
+            let cx = spawnPt.x + Math.cos(spawnPt.heading - Math.PI/2) * (preferredLane * LANE_W);
+            let cy = spawnPt.y + Math.sin(spawnPt.heading - Math.PI/2) * (preferredLane * LANE_W);
+
+            aiCars.push({
+                isPlayer: false, x: cx, y: cy, heading: spawnPt.heading, s: spawnS, 
+                targetLane: preferredLane, currentLane: preferredLane,
+                preferredLane: preferredLane, isSlowBus: isSlowBus,
+                baseSpeed: baseSpd, currentSpeed: baseSpd,
+                length: length, width: width, wb: length * 0.6, 
+                isBraking: false, cooldown: 0
+            });
+        }
+    }
+
+    function initTraffic() {
+        for (let s = 15000; s < 300000; s += 20000 + Math.random() * 15000) spawnSingleCar(bus.s + s);
+        for (let s = -150000; s < -20000; s += 20000 + Math.random() * 15000) spawnSingleCar(bus.s + s);
+    }
+
+    function spawnTrafficDynamic() {
+        if (aiCars.length < TRAFFIC_CONFIG.maxVehicles && Math.random() < TRAFFIC_CONFIG.spawnRate) { 
+            let spawnS = (Math.random() < 0.6) 
+                ? bus.s + 180000 + Math.random() * 80000 
+                : bus.s - 120000 - Math.random() * 30000;
+            spawnSingleCar(spawnS);
+        }
+    }
+
+    generatePath(300000); 
+    let startPt = getPathPoint(0);
+    bus.x = startPt.x + Math.cos(startPt.heading - Math.PI/2) * (bus.currentLane * LANE_W);
+    bus.y = startPt.y + Math.sin(startPt.heading - Math.PI/2) * (bus.currentLane * LANE_W);
+    bus.heading = startPt.heading;
+    camHeading = bus.heading;
+    
+    initTraffic(); 
+
+    function update(dt) {
+        generatePath(bus.s + 350000); 
+        spawnTrafficDynamic();
+
+        let allVehicles = [bus, ...aiCars];
+        const globalSafetyMargin = (bus.w / 2) / LANE_W;
+        const MIN_LANE = -1.5 + globalSafetyMargin;
+        const MAX_LANE = 1.5 - globalSafetyMargin;
+
+        allVehicles.forEach(v => {
+            v.isBraking = false;
+            v.isEmergency = false;
+            let desiredSpeed = v.baseSpeed;
+            let actualGap = Infinity;
+            let frontCar = null;
+
+            if (v.cooldown > 0) v.cooldown -= dt;
+
+            for (let other of allVehicles) {
+                if (v === other) continue;
+                let gap = getForwardGap(v, other, v.currentLane);
+                if (gap > 0 && gap < actualGap) {
+                    actualGap = gap; frontCar = other;
+                }
+            }
+
+            if (v.isPlayer) {
+                let bestLane = v.currentLane;
+                let minCost = Infinity;
+                let maxSafeGap = 0;
+                let paths = [];
+
+                // 評估全線道宏觀路徑
+                for (let l = MIN_LANE; l <= MAX_LANE; l += 0.15) {
+                    let crashTime = checkFutureCollisionWithSubDecisions(v, l, aiCars, false); 
+                    let laneGap = Infinity;
+                    for (let other of aiCars) {
+                        let g = getForwardGap(v, other, l);
+                        if (g > 0 && g < laneGap) laneGap = g;
+                    }
+                    paths.push({ lane: l, crashTime: crashTime, gap: laneGap });
+                }
+
+                // =================================================================
+// 📍 搵返呢段 safePaths 嘅位置，用以下呢段代碼覆蓋：
+// =================================================================
+let safePaths = paths.filter(p => p.crashTime === Infinity);
+
+if (safePaths.length > 0) {
+    for (let p of safePaths) {
+        let cost = -p.gap + Math.abs(p.lane - v.currentLane) * 12000;
+        
+        // 🚌 大巴專屬超車約束（小巴 IS_RED_VAN_MODE 照舊盲目抽飛）
+        if (!IS_RED_VAN_MODE) {
+            // 如果線道小於 -0.2（即係靠近最右線/快線區間）
+            if (p.lane < -0.2) {
+                cost += 505000; // 引入極大懲罰權重，逼大巴優先選擇中線(0)或左線(1)超車
+            }
+        }
+
+        if (cost < minCost) {
+            minCost = cost; bestLane = p.lane; maxSafeGap = p.gap;
+        }
+    }
+    v.targetLane = bestLane;
+    actualGap = maxSafeGap;
+} else {
+                    // 宏觀無生路 -> 逼入物理急停與緊急閃避狀態 (此處亦內置子決策微調)
+                    v.isBraking = true;
+                    v.isEmergency = true;
+                    let emergencyPaths = [];
+                    
+                    for (let l = MIN_LANE; l <= MAX_LANE; l += 0.15) { 
+                        let crashTime = checkFutureCollisionWithSubDecisions(v, l, aiCars, true);
+                        emergencyPaths.push({ lane: l, crashTime: crashTime });
+                    }
+                    
+                    emergencyPaths.sort((a, b) => b.crashTime - a.crashTime);
+                    v.targetLane = emergencyPaths[0].lane; 
+                    actualGap = getForwardGap(v, frontCar, v.currentLane); 
+                }
+
+            } else if (!v.isPlayer) {
+                v.targetLane = Math.round(v.targetLane); 
+
+                if (frontCar && actualGap < 40000 && (v.baseSpeed - frontCar.currentSpeed) > 1000) {
+                    if (v.cooldown <= 0) {
+                        let overtakeLane = v.currentLane - 1; 
+                        if (overtakeLane >= -1 && checkLaneClearForAI(v, overtakeLane, allVehicles, 60000, 40000)) {
+                            v.targetLane = overtakeLane;
+                            v.cooldown = 2.0; 
+                        }
+                    }
+                    if (v.targetLane === v.currentLane) {
+                        desiredSpeed = frontCar.currentSpeed; 
+                        v.isBraking = v.currentSpeed > desiredSpeed + 1000;
+                    }
+                } else if (v.currentLane < v.preferredLane && v.cooldown <= 0) {
+                    let returnLane = v.currentLane + 1;
+                    if (checkLaneClearForAI(v, returnLane, allVehicles, 50000, 30000)) {
+                        v.targetLane = returnLane;
+                        v.cooldown = 5.0;
+                    }
+                }
+            }
+
+            if (actualGap < 40000 && frontCar) {
+                let safeDist = 8000 + v.currentSpeed * 0.45; 
+                let relSpeed = v.currentSpeed - frontCar.currentSpeed;
+                
+                if (actualGap < safeDist) {
+                    desiredSpeed = frontCar.currentSpeed - 1500; 
+                    v.isBraking = true;
+                } else if (relSpeed > 0) {
+                    desiredSpeed = frontCar.currentSpeed + (actualGap - safeDist) * 0.4;
+                }
+            }
+
+            if (v.targetLane < v.preferredLane && actualGap > 60000 && !v.isPlayer) desiredSpeed = v.baseSpeed + 5000; 
+
+            let accel = (v.isPlayer && IS_RED_VAN_MODE) ? 8000 : 3000;
+            let decel = v.isPlayer ? (v.isEmergency ? 45000 : (v.isBraking ? 25000 : 5000)) : (v.isBraking ? 10000 : 2500);
+
+            if (v.currentSpeed < desiredSpeed) {
+                v.currentSpeed = Math.min(desiredSpeed, v.currentSpeed + accel * dt);
+            } else if (v.currentSpeed > desiredSpeed) {
+                v.currentSpeed = Math.max(desiredSpeed, v.currentSpeed - decel * dt);
+            }
+
+            let distAhead = Math.max(5000, actualGap);
+            let laneLerpSpeed = v.isPlayer ? Math.max(1.0, Math.min(4.5, 60000 / distAhead)) : 1.2;
+            if (v.isEmergency) laneLerpSpeed *= 1.8; 
+
+            let lookAhead = v.isPlayer ? Math.max(8000, Math.min(25000, distAhead * 0.5)) : 22000;
+
+            v.currentLane += (v.targetLane - v.currentLane) * laneLerpSpeed * dt;
+            
+            // 🛡️ 公路邊界物理對齊 (實體世界硬限制)
+            v.currentLane = Math.max(MIN_LANE, Math.min(MAX_LANE, v.currentLane));
+
+            let targetPt = getPathPoint(v.s + lookAhead);
+            let targetX = targetPt.x + Math.cos(targetPt.heading - Math.PI/2) * (v.currentLane * LANE_W);
+            let targetY = targetPt.y + Math.sin(targetPt.heading - Math.PI/2) * (v.currentLane * LANE_W);
+
+            let dx = targetX - v.x; let dy = targetY - v.y;
+            let localX = dx * Math.cos(-v.heading) - dy * Math.sin(-v.heading);
+            let localY = dx * Math.sin(-v.heading) + dy * Math.cos(-v.heading);
+
+            let alpha = Math.atan2(localY, localX);
+            v.steeringAngle = Math.atan2(2 * v.wb * Math.sin(alpha), lookAhead);
+            
+            let maxSteer = (v.isPlayer && IS_RED_VAN_MODE ? 48 : 35) * Math.PI / 180;
+            if (v.isEmergency) maxSteer = 53 * Math.PI / 180; // 控制最高軚角
+
+            v.steeringAngle = Math.max(-maxSteer, Math.min(maxSteer, v.steeringAngle));
+
+            v.x += v.currentSpeed * Math.cos(v.heading) * dt;
+            v.y += v.currentSpeed * Math.sin(v.heading) * dt;
+            v.heading += (v.currentSpeed / v.wb) * Math.tan(v.steeringAngle) * dt;
+            v.s += v.currentSpeed * dt; 
+        });
+
+        for (let i = aiCars.length - 1; i >= 0; i--) {
+            if (aiCars[i].s < bus.s - 160000 || aiCars[i].s > bus.s + 350000) {
+                aiCars.splice(i, 1);
+            }
+        }
+
+        let diff = bus.heading - camHeading;
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+        camHeading += diff * 5 * dt; 
+    }
+
+    function draw() {
+        const now = performance.now();
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+
+        update(dt);
+
+        const w = canvas.width; const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.save();
+        
+        ctx.translate(w / 2, h * 0.75);
+        ctx.rotate(-camHeading - Math.PI / 2);
+        
+        let currentScale = scale * (IS_RED_VAN_MODE ? 0.65 : 0.85);
+        ctx.scale(currentScale, currentScale);
+        ctx.translate(-bus.x, -bus.y);
+
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        
+        const lineOffsets = [1.5, 0.5, -0.5, -1.5];
+        for (let i = 0; i < lineOffsets.length; i++) {
+            ctx.beginPath();
+            path.forEach((pt, index) => {
+                let px = pt.x + Math.cos(pt.heading - Math.PI/2) * (lineOffsets[i] * LANE_W);
+                let py = pt.y + Math.sin(pt.heading - Math.PI/2) * (lineOffsets[i] * LANE_W);
+                if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            ctx.lineWidth = 150;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+            ctx.shadowBlur = 15;
+            if (i === 0 || i === 3) ctx.setLineDash([]); 
+            else { ctx.setLineDash([4000, 6000]); ctx.lineDashOffset = -path[0].s; }
+            ctx.stroke();
+        }
+
+        aiCars.forEach(car => {
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            ctx.rotate(car.heading);
+            
+            let baseColor, glowColor;
+            if (car.isSlowBus) {
+                baseColor = 'rgba(100, 255, 100, 0.25)'; glowColor = 'rgba(100, 255, 100, 1)';
+            } else if (car.preferredLane === 1) {
+                baseColor = 'rgba(150, 255, 150, 0.15)'; glowColor = 'rgba(100, 200, 100, 0.8)';
+            } else {
+                baseColor = 'rgba(150, 200, 255, 0.15)'; glowColor = 'rgba(150, 200, 255, 1)';
+            }
+
+            ctx.fillStyle = baseColor;
+            ctx.strokeStyle = glowColor;
+            ctx.shadowColor = glowColor;
+            ctx.shadowBlur = 10;
+            ctx.lineWidth = 80;
+            
+            let rearOffset = -car.length * 0.25;
+            ctx.beginPath();
+            ctx.rect(rearOffset, -car.width/2, car.length, car.width);
+            ctx.fill(); ctx.stroke();
+            
+            ctx.fillStyle = car.isBraking ? '#ff0000' : '#660000';
+            ctx.shadowColor = '#ff0000';
+            ctx.shadowBlur = car.isBraking ? 25 : 5;
+            ctx.fillRect(rearOffset, -car.width/2 + 100, 200, 300);
+            ctx.fillRect(rearOffset, car.width/2 - 400, 200, 300);
+
+            ctx.restore();
+        });
+
+        ctx.save();
+        ctx.translate(bus.x, bus.y);
+        ctx.rotate(bus.heading);
+
+        let frontBumper = bus.wb + bus.fo; 
+        let rearBumper = -(bus.bg + bus.ro);       
+        let totalLength = frontBumper - rearBumper; 
+
+        ctx.beginPath();
+        ctx.rect(rearBumper, -bus.w/2, totalLength, bus.w);
+        ctx.fillStyle = IS_RED_VAN_MODE ? 'rgba(255, 50, 50, 0.22)' : 'rgba(255, 255, 255, 0.08)';
+        ctx.strokeStyle = PLAYER_CFG.color;
+        ctx.shadowColor = PLAYER_CFG.shadow;
+        ctx.shadowBlur = bus.isEmergency ? 40 : 22;
+        ctx.lineWidth = 120;
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = bus.isBraking ? '#ff0000' : '#660000';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = bus.isBraking ? 50 : 0;
+        ctx.fillRect(rearBumper, -bus.w/2 + 150, 300, 300);
+        ctx.fillRect(rearBumper, bus.w/2 - 450, 300, 300);
+
+        function drawWheel(wx, wy, steer = 0) {
+            ctx.save(); ctx.translate(wx, wy); ctx.rotate(steer);
+            ctx.beginPath(); ctx.rect(-400, -150, 800, 300);
+            ctx.fillStyle = '#ffffff'; ctx.shadowBlur = 5; ctx.fill(); ctx.restore();
+        }
+
+        let twF = PLAYER_CFG.treadFront / 2;
+        let twR = PLAYER_CFG.treadRear / 2;
+        
+        drawWheel(bus.wb, -twF, bus.steeringAngle); 
+        drawWheel(bus.wb, twF, bus.steeringAngle);
+        drawWheel(0, -twR, 0); 
+        drawWheel(0, twR, 0);
+        if (!IS_RED_VAN_MODE && bus.bg) {
+            drawWheel(-bus.bg, -twR, 0); drawWheel(-bus.bg, twR, 0);
+        }
+
+        ctx.restore(); ctx.restore(); 
+        requestAnimationFrame(draw);
+    }
+    requestAnimationFrame(draw);
+})();
+</script>
+
+</body>
+</html>
