@@ -789,6 +789,50 @@ textureLoader.load(
             const isPortrait = window.innerHeight > window.innerWidth; if (document.getElementById('init-screen').classList.contains('active')) document.querySelector('.orientation-warning').style.display = isPortrait ? 'block' : 'none';
         });
 
+        // ===== 音效系統 =====
+        const clickSound = new Audio('https://github.com/a330900neo/EarthOnlinememe/raw/refs/heads/main/Sharp_Digital_Tap.mp3');
+        clickSound.preload = 'auto';
+
+        const bgm = new Audio('https://github.com/a330900neo/EarthOnlinememe/raw/refs/heads/main/Christopher%20Lewis%20-%20Hearts%20And%20Arrows.opus');
+        bgm.loop = true;
+        bgm.volume = 0.325;
+        bgm.preload = 'auto';
+        let bgmStarted = false;
+
+        const spawnBgm = new Audio('https://github.com/a330900neo/EarthOnlinememe/raw/refs/heads/main/LiquidMusick%20-%20Joakuim%20-%20Night.mp3');
+        spawnBgm.loop = true;
+        spawnBgm.volume = 0.6;
+        spawnBgm.preload = 'auto';
+
+        function startSpawnBGM() {
+            if (!bgm.paused) bgm.pause();
+            if (spawnBgm.paused) spawnBgm.play().catch(() => {});
+        }
+
+        function stopSpawnBGM() {
+            if (!spawnBgm.paused) {
+                spawnBgm.pause();
+                spawnBgm.currentTime = 0;
+            }
+        }
+
+        function playClick() {
+            const s = clickSound.cloneNode();
+            s.volume = 0.7;
+            s.play().catch(() => {});
+        }
+
+        function startBGM() {
+            if (!bgmStarted) bgmStarted = true;
+            if (bgm.paused) bgm.play().catch(() => {});
+        }
+
+        // 攔截所有 .menu-btn、.back-btn、.modal-btn、.server-item 點擊加音效
+        document.addEventListener('click', function(e) {
+            const el = e.target.closest('.menu-btn:not(.disabled), .back-btn, .modal-btn, .server-item, .top-mission-btn, .close-mission-btn');
+            if (el) playClick();
+        }, true);
+
         // --- 遊戲流程 ---
         function tryStartGame() {
             const docElm = document.documentElement;
@@ -805,6 +849,10 @@ textureLoader.load(
         function showDevLogo() {
             const logoScreen = document.getElementById('dev-logo-screen');
 
+            // 🌍 Logo 一出現就同時開始 preload 地球 + BGM（並行，不阻塞畫面）
+            init3DEarth();
+            bgm.load(); // 預先緩衝 BGM
+
             // Fade in (0.4s)
             logoScreen.classList.add('visible');
 
@@ -815,9 +863,8 @@ textureLoader.load(
 
                 setTimeout(() => {
                     logoScreen.style.display = 'none';
-                    // Logo 消失後才開始 loading
+                    // Logo 消失後顯示 loading 畫面
                     document.getElementById('loading-screen').classList.add('active');
-                    init3DEarth();
                     startLoadingSequence();
                 }, 400); // 等 fade out 完成
             }, 3000 + 400); // 等待 fade in(0.4s) + 顯示 3 秒
@@ -845,13 +892,25 @@ textureLoader.load(
             updateProgress();
         }
 
-        function goToMainMenu() { document.getElementById('loading-screen').classList.remove('active'); document.getElementById('menu-screen').classList.add('active'); document.getElementById('bgContainer').classList.add('shifted'); }
+        function goToMainMenu() { document.getElementById('loading-screen').classList.remove('active'); document.getElementById('menu-screen').classList.add('active'); document.getElementById('bgContainer').classList.add('shifted'); startBGM(); }
 
         let loginTipsInterval = null; 
         function navigateTo(targetScreenId) {
             document.querySelectorAll('.screen').forEach(el => el.classList.remove('active')); document.getElementById(targetScreenId).classList.add('active');
             if (targetScreenId !== 'login-character-screen' && loginTipsInterval) { clearInterval(loginTipsInterval); loginTipsInterval = null; }
             if (targetScreenId === 'menu-screen') { earthMode = 'menu'; targetCameraZ = 250; }
+            // BGM：menu 同 server-screen 播放，其他 screen 暫停
+            const bgmScreens = ['menu-screen', 'server-screen'];
+            const spawnBgmScreens = ['reincarnation-screen', 'spawn-screen', 'character-loading-screen'];
+            if (bgmScreens.includes(targetScreenId)) {
+                stopSpawnBGM();
+                startBGM();
+            } else if (spawnBgmScreens.includes(targetScreenId)) {
+                startSpawnBGM();
+            } else {
+                stopSpawnBGM();
+                if (!bgm.paused) { bgm.pause(); }
+            }
         }
 
         function showServerToast() { showToast('系統提示', '玩家不可以選擇伺服器,登入後隨機分配', 'info'); }
