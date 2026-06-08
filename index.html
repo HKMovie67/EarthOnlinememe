@@ -13,6 +13,24 @@
     <meta name="twitter:image" content="https://raw.githubusercontent.com/a330900neo/EarthOnlinememe/main/logo.png">
     <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/a330900neo/EarthOnlinememe/main/logo.png">
     <title>地球Online - 進入遊戲</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+    <!-- Firebase 自訂模組 -->
+    <script src="firebase-config.js"></script>
+    <script src="firebase-auth.js"></script>
+    <script src="firebase-db.js"></script>
+    <script src="game-world.js"></script>
+    <script src="chat.js"></script>
+    <script>
+        // Error guard: catch any init errors
+        window.addEventListener('error', function(e) {
+            console.error('Game error:', e.message, e.filename, e.lineno);
+        });
+    </script>
     <style>
         * {
             box-sizing: border-box;
@@ -183,6 +201,8 @@
             z-index: 15; transition: all 0.2s ease; opacity: 0; pointer-events: none;
         }
         #login-character-screen.active .top-mission-btn { opacity: 1; pointer-events: auto; }
+        #login-character-screen.active #save-btn { opacity: 1; pointer-events: auto; }
+        #login-character-screen.active #logout-btn { opacity: 1; pointer-events: auto; }
         .top-mission-btn:hover { background: #00a8ff; box-shadow: 0 0 25px #00a8ff; }
 
         /* 登入畫面底部排版 - 左右水平對齊 */
@@ -276,6 +296,117 @@
         .modal-btn { background: linear-gradient(90deg, #007cb3, #00a8ff); border: none; color: white; padding: 12px 40px; font-size: 1rem; letter-spacing: 4px; border-radius: 25px; cursor: pointer; transition: all 0.2s ease; font-weight: bold; }
 
         @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+
+        /* ===== Chatbox ===== */
+        #chat-panel {
+            position: fixed; bottom: 0; left: 8px; z-index: 50;
+            width: 300px; max-width: 90vw;
+            font-family: "Microsoft JhengHei", sans-serif;
+        }
+        #chat-header {
+            background: rgba(10,15,25,0.9);
+            border: 1px solid rgba(0,168,255,0.3);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+            color: #00a8ff; font-size: 0.85rem; font-weight: bold;
+            letter-spacing: 1px;
+        }
+        #chat-header:hover { background: rgba(0,168,255,0.15); }
+        #chat-status { font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-right: 8px; }
+        #chat-body {
+            display: none; flex-direction: column;
+            background: rgba(10,15,25,0.85);
+            border: 1px solid rgba(0,168,255,0.3);
+            border-top: none;
+            backdrop-filter: blur(10px);
+            height: 280px;
+            border-radius: 0 0 8px 8px;
+        }
+        #chat-messages {
+            flex: 1; overflow-y: auto; padding: 8px;
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        #chat-messages::-webkit-scrollbar { width: 3px; }
+        #chat-messages::-webkit-scrollbar-thumb { background: rgba(0,168,255,0.3); border-radius: 2px; }
+        .chat-msg {
+            background: rgba(255,255,255,0.06);
+            border-radius: 8px; padding: 6px 10px;
+            max-width: 85%; align-self: flex-start;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .chat-msg-me {
+            align-self: flex-end;
+            background: rgba(0,168,255,0.15);
+            border-color: rgba(0,168,255,0.25);
+        }
+        .chat-msg-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 3px;
+        }
+        .chat-msg-user { font-size: 0.7rem; color: #00a8ff; font-weight: bold; }
+        .chat-msg-time { font-size: 0.6rem; color: rgba(255,255,255,0.3); }
+        .chat-msg-text { font-size: 0.8rem; color: #ddd; line-height: 1.4; word-break: break-word; }
+        #chat-input-row {
+            display: flex; padding: 6px; gap: 4px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        #chat-input {
+            flex: 1; background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #fff; padding: 8px; border-radius: 6px;
+            font-size: 0.8rem; outline: none;
+        }
+        #chat-input:focus { border-color: #00a8ff; }
+        #chat-send-btn, #chat-verify-btn {
+            background: #00a8ff; border: none; color: #fff;
+            padding: 8px 14px; border-radius: 6px; cursor: pointer;
+            font-size: 0.8rem; font-weight: bold; letter-spacing: 1px;
+        }
+        #chat-verify-btn { background: #e84393; }
+        #chat-send-btn:hover { background: #0088cc; }
+        #chat-verify-btn:hover { background: #d63384; }
+
+        /* Threads verify modal */
+        #threads-verify-modal {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
+            z-index: 200; display: none; justify-content: center; align-items: center;
+        }
+        .threads-verify-box {
+            background: linear-gradient(135deg, rgba(10,20,35,0.95), rgba(5,10,20,0.98));
+            border: 1px solid rgba(0,168,255,0.4); border-radius: 16px;
+            padding: 30px; max-width: 420px; width: 90%; text-align: center;
+        }
+        .threads-verify-box h3 { color: #fff; font-size: 1.2rem; margin-bottom: 8px; letter-spacing: 2px; }
+        .threads-verify-box .sub { color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-bottom: 20px; }
+        .threads-follow-btn {
+            background: linear-gradient(90deg, #e84393, #fd79a8);
+            border: none; color: #fff; padding: 12px 30px; border-radius: 25px;
+            font-size: 1rem; font-weight: bold; cursor: pointer; letter-spacing: 2px;
+            margin-bottom: 20px; display: inline-block;
+        }
+        .threads-follow-btn:hover { box-shadow: 0 0 20px rgba(232,67,147,0.5); }
+        .threads-input {
+            width: 100%; background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.2); color: #fff;
+            padding: 10px; border-radius: 8px; font-size: 0.9rem;
+            text-align: center; margin-bottom: 10px; outline: none;
+        }
+        .threads-input:focus { border-color: #00a8ff; }
+        .threads-verify-error { color: #ff4757; font-size: 0.75rem; min-height: 1.2rem; }
+        .threads-confirm-btn {
+            background: #00a8ff; border: none; color: #fff;
+            padding: 10px 24px; border-radius: 8px; font-size: 0.9rem;
+            cursor: pointer; font-weight: bold; letter-spacing: 1px;
+        }
+        .threads-close-btn {
+            background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff;
+            padding: 8px 20px; border-radius: 8px; font-size: 0.8rem;
+            cursor: pointer; margin-left: 10px;
+        }
 
         @media (max-height: 480px) {
             .left-panel-container { margin-left: 5vw; width: 280px;}
@@ -732,8 +863,8 @@
             <h2 class="page-header" style="font-size: 1.8rem;">登入或註冊</h2>
             <div class="page-subtitle" style="margin-bottom: 30px;">ACCOUNT ACCESS</div>
             <div class="button-group" style="width: 100%;">
-                <div class="menu-btn" style="text-align: center; padding-left: 0;" onclick="handleLogin()">登入</div>
-                <div class="menu-btn" style="text-align: center; padding-left: 0;" onclick="startReincarnation()">
+                <div class="menu-btn" style="text-align: center; padding-left: 0;" onclick="openAuthModal('login')">登入</div>
+                <div class="menu-btn" style="text-align: center; padding-left: 0;" onclick="openAuthModal('register')">
                     <img src="https://raw.githubusercontent.com/a330900neo/EarthOnlinememe/main/DNAicon.png" class="btn-icon">註冊
                 </div>
             </div>
@@ -789,6 +920,30 @@
         <button class="history-open-btn" onclick="openHistoryScreen()">角色歷史</button>
         <button class="top-mission-btn" onclick="openMissionManager()">任務管理</button>
 
+        <!-- Save & Logout buttons -->
+        <button onclick="manualSave()" style="
+            position: absolute; top: 30px; right: 220px;
+            background: linear-gradient(90deg, rgba(46,204,113,0.15), rgba(39,174,96,0.3));
+            border: 1px solid rgba(46,204,113,0.5); color: white;
+            padding: 9px 22px; border-radius: 22px;
+            font-size: 0.95rem; font-weight: bold; letter-spacing: 3px;
+            cursor: pointer; backdrop-filter: blur(5px);
+            box-shadow: 0 0 12px rgba(46,204,113,0.3);
+            z-index: 15; transition: all 0.2s ease;
+            opacity: 0; pointer-events: none;
+        " id="save-btn">保存</button>
+        <button onclick="handleLogout()" style="
+            position: absolute; top: 30px; right: 120px;
+            background: linear-gradient(90deg, rgba(255,71,87,0.15), rgba(255,71,87,0.3));
+            border: 1px solid rgba(255,71,87,0.5); color: white;
+            padding: 9px 22px; border-radius: 22px;
+            font-size: 0.95rem; font-weight: bold; letter-spacing: 3px;
+            cursor: pointer; backdrop-filter: blur(5px);
+            box-shadow: 0 0 12px rgba(255,71,87,0.3);
+            z-index: 15; transition: all 0.2s ease;
+            opacity: 0; pointer-events: none;
+        " id="logout-btn">登出</button>
+
         <div class="left-panel-container login-panel-transparent">
             <h2 class="page-header">角色資訊</h2>
             <div class="page-subtitle">CHARACTER PROFILE</div>
@@ -836,12 +991,39 @@
     <div id="aboutModal" class="modal-overlay" onclick="closeModalOnOverlay(event, 'aboutModal')">
         <div class="modal-content">
             <div class="modal-header">關於 地球online</div>
-            <span class="modal-version">SYSTEM VERSION v2026.7 (Mission System)</span>
+            <span class="modal-version">SYSTEM VERSION v0806261 by HKMovie67</span>
             <div class="about-body">
                 <p style="font-weight: bold;">一款依賴運氣的 3D 開放式世界遊戲</p>
                 <p>擁有 <span style="color: #00a8ff; font-weight: bold;">80億</span> 同時在線玩家</p>
             </div>
             <button class="modal-btn" onclick="closeModal('aboutModal')">確認</button>
+        </div>
+    </div>
+
+    <!-- Firebase Auth Modal -->
+    <div id="authModal" class="modal-overlay" onclick="closeModalOnOverlay(event, 'authModal')">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header" id="auth-modal-title">登入 地球Online</div>
+            <span class="modal-version" id="auth-modal-subtitle">ACCOUNT ACCESS</span>
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+                <input type="email" id="auth-email" placeholder="電郵地址" style="
+                    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2);
+                    color: white; padding: 12px; border-radius: 6px; font-size: 1rem;
+                    outline: none; transition: border-color 0.2s;
+                " onfocus="this.style.borderColor='#00a8ff'">
+                <input type="password" id="auth-password" placeholder="密碼" style="
+                    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2);
+                    color: white; padding: 12px; border-radius: 6px; font-size: 1rem;
+                    outline: none; transition: border-color 0.2s;
+                " onfocus="this.style.borderColor='#00a8ff'">
+                <div id="auth-error" style="color: #ff4757; font-size: 0.8rem; min-height: 1.2rem; text-align: left;"></div>
+                <button class="modal-btn" id="auth-submit-btn" onclick="handleAuthSubmit()">登入</button>
+                <div style="color: rgba(255,255,255,0.5); font-size: 0.8rem; cursor: pointer; text-align: center;"
+                     id="auth-toggle-text" onclick="toggleAuthMode()">
+                    未有帳戶？<span style="color: #00a8ff;">註冊新帳戶</span>
+                </div>
+            </div>
+            <button class="modal-btn" style="background: rgba(255,255,255,0.1);" onclick="closeModal('authModal')">返回</button>
         </div>
     </div>
 
@@ -926,6 +1108,159 @@
             gender: '男', wealth: 0, constitution: 100, years: 18, love: 'A0', achievements: []
         };
         let activeMissions = [];
+        let currentAuthMode = 'login'; // 'login' or 'register'
+
+        // ==================== Firebase Auth UI 邏輯 ====================
+        function openAuthModal(mode) {
+            currentAuthMode = mode;
+            document.getElementById('auth-error').innerText = '';
+            document.getElementById('auth-email').value = '';
+            document.getElementById('auth-password').value = '';
+            
+            if (mode === 'register') {
+                document.getElementById('auth-modal-title').innerText = '註冊 地球Online';
+                document.getElementById('auth-modal-subtitle').innerText = 'CREATE ACCOUNT';
+                document.getElementById('auth-submit-btn').innerText = '註冊';
+                document.getElementById('auth-toggle-text').innerHTML = '已經有帳戶？<span style="color: #00a8ff;">登入</span>';
+            } else {
+                document.getElementById('auth-modal-title').innerText = '登入 地球Online';
+                document.getElementById('auth-modal-subtitle').innerText = 'ACCOUNT ACCESS';
+                document.getElementById('auth-submit-btn').innerText = '登入';
+                document.getElementById('auth-toggle-text').innerHTML = '未有帳戶？<span style="color: #00a8ff;">註冊新帳戶</span>';
+            }
+            openModal('authModal');
+        }
+
+        function toggleAuthMode() {
+            openAuthModal(currentAuthMode === 'login' ? 'register' : 'login');
+        }
+
+        async function handleAuthSubmit() {
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const errorDiv = document.getElementById('auth-error');
+
+            if (!email || !password) {
+                errorDiv.innerText = '請填寫電郵同密碼';
+                return;
+            }
+
+            let result;
+            if (currentAuthMode === 'register') {
+                result = await firebaseRegister(email, password);
+            } else {
+                result = await firebaseLogin(email, password);
+            }
+
+            if (result.success) {
+                closeModal('authModal');
+                // Auth 成功 → 進入角色畫面
+                await enterGameAfterAuth();
+            } else {
+                errorDiv.innerText = result.error || '操作失敗';
+            }
+        }
+
+        // 支援 Enter 鍵提交
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && document.getElementById('authModal').classList.contains('active')) {
+                handleAuthSubmit();
+            }
+        });
+
+        async function enterGameAfterAuth() {
+            // 嘗試從雲端載入已有角色
+            const saved = await loadCharacterFromCloud();
+            
+            if (saved) {
+                // 有已保存角色 → 直接載入 → 入 game world
+                unpackCharacterState(saved);
+                showToast('歡迎返嚟', '已載入你嘅角色', 'info');
+                goToGameWorld();
+            } else {
+                // 新用戶 → 創建新角色（保留投胎動畫）
+                startReincarnationForNewChar();
+            }
+        }
+
+        function goToGameWorld() {
+            if (activeMissions.length === 0) initMissions();
+            stopSpawnBGM();
+            // Hide ALL screens first
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            // Close any open modals
+            document.querySelectorAll('.modal-overlay, .mission-modal-overlay').forEach(el => el.classList.remove('active'));
+            document.getElementById('bgContainer').classList.remove('shifted');
+            startGameWorld();
+        }
+
+        function showLoginCharacterScreen() {
+            navigateTo('login-character-screen');
+            document.getElementById('bgContainer').classList.remove('shifted');
+            earthMode = 'menu'; targetCameraZ = 160;
+
+            document.getElementById('login-gender').innerText = playerContext.gender;
+            document.getElementById('login-wealth').innerText = `$${playerContext.wealth.toLocaleString()} HKD`;
+            document.getElementById('login-region').innerText = '香港';
+            document.getElementById('login-constitution').innerText = `${playerContext.constitution} / 100`;
+            document.getElementById('login-years').innerText = `${playerContext.years} 年`;
+            document.getElementById('login-love').innerText = playerContext.love;
+
+            // Render achievements
+            let earnedAchievements = [];
+            achievementsData.forEach(ach => {
+                if (playerContext.achievements.includes(ach.id)) earnedAchievements.push(ach);
+            });
+            document.getElementById('login-achievements-count').innerText = `${earnedAchievements.length} 個`;
+            const achListContainer = document.getElementById('login-achievements-list');
+            if (earnedAchievements.length === 0) {
+                achListContainer.innerHTML = `<div class="login-ach-item" style="color:rgba(255,255,255,0.4); text-align:center;">此角色過於平凡，未解鎖任何成就</div>`;
+            } else {
+                achListContainer.innerHTML = earnedAchievements.map(ach => 
+                    `<div class="login-ach-item"><span class="login-ach-title" style="color: ${ach.color || '#fff'};">${ach.title}</span><span class="login-ach-desc">${ach.desc}</span></div>`
+                ).join('');
+            }
+
+            // Tips
+            const tipsArea = document.getElementById('login-tips-area');
+            let currentTipIndex = 0;
+            tipsArea.innerText = waitingTipsData[currentTipIndex] || '';
+            if (loginTipsInterval) clearInterval(loginTipsInterval);
+            if (waitingTipsData.length > 0) {
+                loginTipsInterval = setInterval(() => {
+                    currentTipIndex = (currentTipIndex + 1) % waitingTipsData.length;
+                    tipsArea.innerText = waitingTipsData[currentTipIndex];
+                }, 3000);
+            }
+
+            // Missions
+            if (activeMissions.length === 0) initMissions();
+        }
+
+        // ── 手動保存角色 ──
+        async function manualSave() {
+            const packed = packCharacterState();
+            const ok = await saveCharacterToCloud(packed);
+            if (ok) showToast('保存成功', '角色數據已上傳到雲端', 'info');
+        }
+
+        // ── 登出 ──
+        async function handleLogout() {
+            // 先保存
+            const packed = packCharacterState();
+            await saveCharacterToCloud(packed);
+            await firebaseLogout();
+            
+            // Reset state
+            playerContext = { gender: '男', wealth: 0, constitution: 100, years: 18, love: 'A0', achievements: [] };
+            activeMissions = [];
+            playerTraits = [];
+            simulatedHistory = [];
+            
+            navigateTo('menu-screen');
+            document.getElementById('bgContainer').classList.add('shifted');
+            earthMode = 'menu'; targetCameraZ = 250;
+        }
 
         // --- Three.js ---
         let scene, camera, renderer, controls, earth, clouds;
@@ -1294,6 +1629,49 @@ textureLoader.load(
             traitsData.forEach(t => { if (Math.random() <= t.prob) { playerTraits.push(t); traitsHtml += `<div class="trait-box ${t.type || ''}"><h4>${t.title}</h4><p>${t.desc}</p></div>`; } });
             if (traitsHtml === '') traitsHtml = `<div class="trait-box" style="border-left-color: #888;"><h4>凡夫俗子</h4><p>沒有獲得任何特殊出廠設定，一切只能靠自己。</p></div>`;
             document.getElementById('char-traits').innerHTML = traitsHtml;
+
+            // 🔥 新角色自動保存到 Firestore
+            playerContext.gender = isMale ? '男' : '女';
+            playerContext.wealth = wealth;
+            playerContext.constitution = constitution;
+            playerContext.createdAt = new Date().toISOString();
+
+            // Simulate history
+            const traitIds = playerTraits.map(t => t.id);
+            const simResult = simulateHistory(playerContext, traitIds, 18);
+            simulatedHistory = simResult.history;
+            playerContext.love = simResult.finalLove;
+
+            // Roll achievements
+            playerContext.achievements = [];
+            achievementsData.forEach(ach => {
+                let p = ach.prob;
+                if (ach.conditional_on && playerContext.achievements.includes(ach.conditional_on)) p = ach.conditional_prob;
+                if (Math.random() < p) playerContext.achievements.push(ach.id);
+            });
+
+            autoSaveCharacter();
+
+            // 3 秒後自動進入 game world
+            setTimeout(() => {
+                goToGameWorld();
+            }, 3000);
+        }
+
+        // New char reincarnation wrapper
+        function startReincarnationForNewChar() {
+            document.getElementById('bgContainer').classList.remove('shifted');
+            navigateTo('reincarnation-screen');
+            earthMode = 'reincarnating'; currentEarthSpeed = 0.12;
+            const waitTime = Math.floor(Math.random() * 5000) + 2000;
+            setTimeout(showSpawnPoint, waitTime);
+        }
+
+        async function autoSaveCharacter() {
+            if (!getCurrentUser()) return;
+            const packed = packCharacterState();
+            await saveCharacterToCloud(packed);
+            console.log('💾 角色自動保存');
         }
 
         // ==================== 條件解析引擎 (Safe Evaluator) ====================
@@ -1732,6 +2110,8 @@ textureLoader.load(
                 if (availList.children.length === 0) {
                     availList.innerHTML = '<div class="mission-empty">目前沒有可接取的任務</div>';
                 }
+                // 🔥 任務狀態變更後自動保存
+                autoSaveCharacter();
             });
 
             // Start appear-in of new card (slight delay so both play simultaneously)
@@ -1779,6 +2159,96 @@ textureLoader.load(
                 <div class="history-event-close" onclick="document.getElementById('history-event-overlay').classList.remove('active')">×</div>
             </div>
             <div class="history-event-list" id="history-event-list"></div>
+        </div>
+    </div>
+
+    <!-- ===== 遊戲世界 (Canvas) ===== -->
+    <div id="game-world-screen" class="screen" style="background: transparent;">
+        <canvas id="gw-canvas" style="width:100vw;height:100vh;display:block;"></canvas>
+        
+        <!-- Top bar buttons -->
+        <div style="position:absolute;top:12px;right:12px;display:flex;gap:8px;z-index:20;">
+            <button onclick="stopGameWorld(); navigateTo('login-character-screen'); showLoginCharacterScreen();"
+                style="background:rgba(0,168,255,0.2);border:1px solid #00a8ff;color:#fff;padding:8px 16px;
+                border-radius:20px;font-size:0.85rem;cursor:pointer;letter-spacing:2px;">📋 角色</button>
+            <button onclick="openMissionManager()"
+                style="background:rgba(0,168,255,0.2);border:1px solid #00a8ff;color:#fff;padding:8px 16px;
+                border-radius:20px;font-size:0.85rem;cursor:pointer;letter-spacing:2px;">📜 任務</button>
+            <button onclick="openHistoryScreen()"
+                style="background:rgba(0,168,255,0.2);border:1px solid #00a8ff;color:#fff;padding:8px 16px;
+                border-radius:20px;font-size:0.85rem;cursor:pointer;letter-spacing:2px;">🕐 歷史</button>
+            <button onclick="manualSave()"
+                style="background:rgba(46,204,113,0.2);border:1px solid #2ecc71;color:#fff;padding:8px 16px;
+                border-radius:20px;font-size:0.85rem;cursor:pointer;letter-spacing:2px;">💾 保存</button>
+        </div>
+        
+        <!-- Movement hint -->
+        <div style="position:absolute;bottom:55px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.5);
+            font-size:0.75rem;letter-spacing:1px;z-index:10;pointer-events:none;">
+            ← 鍵盤方向鍵 / 手機滑動 → 移動角色
+        </div>
+
+        <!-- Version -->
+        <div style="position:absolute;bottom:8px;right:12px;color:rgba(255,255,255,0.25);
+            font-size:0.65rem;letter-spacing:1px;z-index:10;pointer-events:none;font-family:monospace;">
+            v0806261 by HKMovie67
+        </div>
+
+        <!-- Queue overlay -->
+        <div id="queue-overlay" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;
+            background:rgba(0,0,0,0.85);z-index:100;flex-direction:column;
+            justify-content:center;align-items:center;text-align:center;">
+            <div style="font-size:3rem;margin-bottom:20px;">🟡</div>
+            <div style="font-size:1.5rem;color:#f1c40f;font-weight:bold;letter-spacing:3px;margin-bottom:8px;">
+                伺服器已滿
+            </div>
+            <div style="color:rgba(255,255,255,0.6);font-size:0.9rem;margin-bottom:4px;">
+                在線人數：<span id="queue-online" style="color:#00a8ff;">200</span> / 200
+            </div>
+            <div style="color:rgba(255,255,255,0.6);font-size:0.9rem;margin-bottom:4px;">
+                你嘅排隊位置：<span id="queue-position" style="color:#00ff88;">-</span>
+            </div>
+            <div style="color:rgba(255,255,255,0.4);font-size:0.75rem;">
+                預計等候：~<span id="queue-estimate">-</span> 分鐘
+            </div>
+            <div style="color:rgba(255,255,255,0.3);font-size:0.65rem;margin-top:20px;animation:pulse 2s infinite;">
+                請勿關閉視窗，排到會自動進入...
+            </div>
+        </div>
+
+        <!-- Chatbox -->
+        <div id="chat-panel">
+            <div id="chat-header" onclick="toggleChat()">
+                <span>💬 街頭吹水 <span id="chat-toggle-icon">▲</span></span>
+                <span id="chat-status">🔒 請先驗證 Threads</span>
+            </div>
+            <div id="chat-body">
+                <div id="chat-messages"></div>
+                <div id="chat-input-row">
+                    <button id="chat-verify-btn" onclick="startThreadsVerify()">🔗 驗證 Threads</button>
+                    <input id="chat-input" type="text" placeholder="輸入訊息..." disabled>
+                    <button id="chat-send-btn" onclick="sendChatMessage()" style="display:none;">發送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Threads 驗證 Modal -->
+    <div id="threads-verify-modal">
+        <div class="threads-verify-box">
+            <h3>🔗 驗證 Threads 身份</h3>
+            <div class="sub">需要 follow @HKMovie67 先可以傾計</div>
+            <br>
+            <button class="threads-follow-btn" onclick="openThreadsProfile()">
+                去 Threads Follow @HKMovie67
+            </button>
+            <br>
+            <div class="sub" style="margin-top:10px;">Follow 完之後，輸入你嘅 Threads username：</div>
+            <input class="threads-input" id="threads-username" type="text" placeholder="@ 你嘅 Threads username">
+            <div class="threads-verify-error" id="threads-verify-error"></div>
+            <br>
+            <button class="threads-confirm-btn" onclick="confirmThreadsVerify()">✅ 確認驗證</button>
+            <button class="threads-close-btn" onclick="closeThreadsVerify()">取消</button>
         </div>
     </div>
 
